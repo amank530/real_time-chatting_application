@@ -24,6 +24,7 @@ import {
   Plus, 
   Settings, 
   LogOut, 
+  FolderOpen, 
   Sparkles,
   Check,
   UserPlus,
@@ -517,8 +518,12 @@ export default function Sidebar({
 
       {/* User Profile Footer */}
       <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="relative">
+        <div 
+          onClick={() => setActiveTab("profile")}
+          className="flex items-center gap-3 min-w-0 cursor-pointer hover:bg-slate-900/40 p-1 rounded-xl transition"
+          title="Go to My Profile & Documents"
+        >
+          <div className="relative shrink-0">
             <img src={currentUser.photoURL} alt={currentUser.displayName} className="w-9 h-9 rounded-full object-cover border border-slate-700" />
             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-500 border border-slate-900" />
           </div>
@@ -541,9 +546,16 @@ export default function Sidebar({
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <button
+            onClick={() => setActiveTab("profile")}
+            className={`p-1.5 rounded-md transition ${activeTab === "profile" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
+            title="My Profile & Documents"
+          >
+            <FolderOpen className="w-4 h-4" />
+          </button>
+          <button
             onClick={() => setShowSettingsModal(true)}
             className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition"
-            title="Profile & Status"
+            title="AI Status Settings"
           >
             <Settings className="w-4 h-4" />
           </button>

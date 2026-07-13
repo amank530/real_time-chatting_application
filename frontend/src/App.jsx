@@ -28,6 +28,7 @@ import ChatArea from "./components/ChatArea.jsx";
 import CallWindow from "./components/CallWindow.jsx";
 import AiAssistantPanel from "./components/AiAssistantPanel.jsx";
 import AdminPanel from "./components/AdminPanel.jsx";
+import ProfilePanel from "./components/ProfilePanel.jsx";
 import CallHistoryPanel from "./components/CallHistoryPanel.jsx";
 import { AnimatePresence } from "motion/react";
 
@@ -57,6 +58,39 @@ export default function App() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  const logCallEventToChat = async (chatId, text) => {
+    if (!chatId) return;
+    try {
+      const db = getDb();
+      const messagesRef = collection(db, "chats", chatId, "messages");
+      await addDoc(messagesRef, {
+        senderId: "system",
+        senderName: "System",
+        text: text,
+        type: "system",
+        timestamp: new Date(),
+        readBy: ["system"],
+        reactions: {},
+        encrypted: false
+      });
+      // Update last message in the room
+      const chatRef = doc(db, "chats", chatId);
+      await updateDoc(chatRef, {
+        lastMessage: {
+          text: `📢 ${text}`,
+          senderId: "system",
+          senderName: "System",
+          timestamp: new Date()
+        }
+      });
+      if (socket) {
+        socket.emit("message-updated", { chatId });
+      }
+    } catch (err) {
+      console.warn("Failed to log call system event message:", err);
+    }
+  };
 
   // Real-time sync of all users from Firestore
   useEffect(() => {
@@ -217,6 +251,25 @@ export default function App() {
       }).catch(err => console.error("Failed to log incoming call:", err));
     });
 
+    socketInstance.on("call-accepted", () => {
+      setActiveCallSession((prev) => {
+        if (prev) {
+          const updated = { ...prev, status: "connected", startTime: Date.now() };
+          // Update status in call history
+          const db = getDb();
+          if (prev.dbLogId) {
+            updateDoc(doc(db, "calls", prev.dbLogId), {
+              status: "connected"
+            }).catch(err => console.warn("Failed to update call status in db on accept:", err));
+          }
+          // Log connected status to chat room
+          logCallEventToChat(prev.chatId, `📞 ${prev.type === "video" ? "Video" : "Voice"} Call Connected Successfully`);
+          return updated;
+        }
+        return prev;
+      });
+    });
+
     socketInstance.on("call-ended", () => {
       setActiveCallSession((prev) => {
         if (prev) {
@@ -327,6 +380,18 @@ export default function App() {
   const handleDeclineIncomingCall = () => {
     if (socket && activeCallSession) {
       socket.emit("end-call", { to: activeCallSession.callerId });
+      
+      // Update status in call history
+      const db = getDb();
+      if (activeCallSession.dbLogId) {
+        updateDoc(doc(db, "calls", activeCallSession.dbLogId), {
+          status: "declined"
+        }).catch(err => console.warn(err));
+      }
+
+      // Log call as missed/declined to chat room
+      logCallEventToChat(activeCallSession.chatId, `❌ Missed/Declined ${activeCallSession.type === "video" ? "Video" : "Voice"} Call`);
+
       updateCallDurationInDb(activeCallSession);
     }
     setActiveCallSession(null);
@@ -337,6 +402,17 @@ export default function App() {
     if (socket && activeCallSession) {
       socket.emit("answer-call", { to: activeCallSession.callerId, signal: null });
       setActiveCallSession(prev => prev ? { ...prev, status: "connected", startTime: Date.now() } : null);
+
+      // Update status in call history
+      const db = getDb();
+      if (activeCallSession.dbLogId) {
+        updateDoc(doc(db, "calls", activeCallSession.dbLogId), {
+          status: "connected"
+        }).catch(err => console.warn(err));
+      }
+
+      // Log connected status to chat room
+      logCallEventToChat(activeCallSession.chatId, `📞 ${activeCallSession.type === "video" ? "Video" : "Voice"} Call Connected`);
     }
   };
 
@@ -344,6 +420,23 @@ export default function App() {
     if (socket && activeCallSession) {
       const targetId = isIncomingCall ? activeCallSession.callerId : activeCallSession.receiverId;
       socket.emit("end-call", { to: targetId });
+
+      if (activeCallSession.status === "ringing") {
+        // If it was cancelled before connected
+        const db = getDb();
+        if (activeCallSession.dbLogId) {
+          updateDoc(doc(db, "calls", activeCallSession.dbLogId), {
+            status: "missed"
+          }).catch(err => console.warn(err));
+        }
+        logCallEventToChat(activeCallSession.chatId, `❌ Not Connected/Cancelled ${activeCallSession.type === "video" ? "Video" : "Voice"} Call`);
+      } else {
+        // If it was connected, log end with duration
+        const duration = activeCallSession.startTime ? Math.round((Date.now() - activeCallSession.startTime) / 1000) : 0;
+        const durationStr = duration > 60 ? `${Math.floor(duration / 60)}m ${duration % 60}s` : `${duration}s`;
+        logCallEventToChat(activeCallSession.chatId, `⏱️ Call Ended (Duration: ${durationStr})`);
+      }
+
       updateCallDurationInDb(activeCallSession);
     }
     setActiveCallSession(null);
@@ -446,6 +539,12 @@ export default function App() {
                 socket={socket}
                 typingUserText={typingUsers[activeChat.id] || null}
                 onBack={isMobile ? () => setActiveChat(null) : null}
+                allUsers={allUsers}
+                activeCallSession={activeCallSession}
+                isIncomingCall={isIncomingCall}
+                onDeclineCall={handleDeclineIncomingCall}
+                onAcceptCall={handleAcceptIncomingCall}
+                onEndCall={handleHangUpCall}
               />
             ) : showCallHistory ? (
               <CallHistoryPanel
@@ -504,6 +603,11 @@ export default function App() {
               currentUser={currentUser} 
               onBack={isMobile ? () => setActiveTab("chats") : null}
             />
+          ) : activeTab === "profile" ? (
+            <ProfilePanel
+              currentUser={currentUser}
+              onBack={() => setActiveTab("chats")}
+            />
           ) : (
             <AdminPanel 
               onBack={isMobile ? () => setActiveTab("chats") : null}
@@ -512,8 +616,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Full Screen HD calling Overlay */}
-      {activeCallSession && (
+      {/* Full Screen HD calling Overlay - only if not already shown embedded inside the active chat area */}
+      {activeCallSession && (!activeChat || activeChat.id !== activeCallSession.chatId) && (
         <CallWindow
           chatId={activeCallSession.chatId}
           chatName={isIncomingCall ? activeCallSession.callerName : activeCallSession.receiverName}

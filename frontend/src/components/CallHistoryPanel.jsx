@@ -211,16 +211,21 @@ export default function CallHistoryPanel({ currentUser, onClose, isFullView = fa
 
                 if (isOutgoing) {
                   directionIcon = <PhoneOutgoing className="w-3.5 h-3.5 text-blue-400" />;
-                  statusText = "Outgoing";
-                  badgeColor = "text-blue-400 bg-blue-950/40 border-blue-900/30";
+                  if (log.duration > 0 || log.status === "connected") {
+                    statusText = "Outgoing (Connected)";
+                    badgeColor = "text-indigo-400 bg-indigo-950/40 border-indigo-900/30";
+                  } else {
+                    statusText = "Outgoing (No Answer)";
+                    badgeColor = "text-rose-400 bg-rose-950/40 border-rose-900/30";
+                  }
                 } else {
                   if (log.duration === 0) {
                     directionIcon = <PhoneMissed className="w-3.5 h-3.5 text-rose-400 animate-pulse" />;
-                    statusText = "Missed";
+                    statusText = log.status === "declined" ? "Declined" : "Missed";
                     badgeColor = "text-rose-400 bg-rose-950/40 border-rose-900/30";
                   } else {
                     directionIcon = <PhoneIncoming className="w-3.5 h-3.5 text-emerald-400" />;
-                    statusText = "Incoming";
+                    statusText = "Incoming (Connected)";
                     badgeColor = "text-emerald-400 bg-emerald-950/40 border-emerald-900/30";
                   }
                 }

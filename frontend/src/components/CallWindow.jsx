@@ -28,11 +28,22 @@ export default function CallWindow({
   onAccept,
   onEndCall,
   socket,
-  remoteUserId
+  remoteUserId,
+  embedded = false
 }) {
-  const [callStatus, setCallStatus] = useState(
-    isIncoming ? "ringing" : "connected"
-  );
+  const [callStatus, setCallStatus] = useState("ringing");
+
+  // Listen to call acceptance signal to successfully connect call
+  useEffect(() => {
+    if (!socket) return;
+    const onCallAccepted = () => {
+      setCallStatus("connected");
+    };
+    socket.on("call-accepted", onCallAccepted);
+    return () => {
+      socket.off("call-accepted", onCallAccepted);
+    };
+  }, [socket]);
   
   // Audio/Video mute controls
   const [micMuted, setMicMuted] = useState(false);
@@ -210,7 +221,13 @@ export default function CallWindow({
   };
 
   return (
-    <div id="active-call-modal" className="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-between p-6 z-[99] text-slate-100">
+    <div 
+      id={embedded ? "active-call-embedded" : "active-call-modal"} 
+      className={embedded 
+        ? "w-full bg-slate-900 border border-slate-800 rounded-2xl flex flex-col items-center justify-between p-4 text-slate-100 shadow-xl overflow-hidden animate-fadeIn"
+        : "fixed inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-between p-6 z-[99] text-slate-100"
+      }
+    >
       
       {/* Call Header Indicator */}
       <div className="w-full flex items-center justify-between text-xs text-slate-400 shrink-0">
@@ -223,34 +240,34 @@ export default function CallWindow({
             {callType === "video" ? "HD Video Session" : "HD Audio Session"}
           </span>
         </div>
-        <div className="bg-slate-900 border border-slate-800 px-3 py-1 rounded-full font-mono font-medium text-slate-300">
+        <div className="bg-slate-950/60 border border-slate-800 px-3 py-1 rounded-full font-mono font-medium text-slate-300">
           {callStatus === "connected" ? formatTimer(callDuration) : "Dialing..."}
         </div>
       </div>
 
       {/* Main Calling Stage */}
-      <div className="flex-1 w-full max-w-4xl flex flex-col justify-center items-center relative my-6">
+      <div className={`w-full flex flex-col justify-center items-center relative ${embedded ? "my-2" : "flex-1 max-w-4xl my-6"}`}>
         {callStatus === "ringing" ? (
           /* RINGING LAYOUT */
-          <div className="text-center space-y-6">
+          <div className="text-center space-y-4">
             <div className="relative inline-block">
               <div className="absolute inset-0 bg-indigo-500/20 rounded-full animate-ping scale-150 duration-1000" />
               <img 
                 src={`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(callerName)}`} 
                 alt={callerName} 
-                className="w-28 h-28 rounded-full border-4 border-indigo-600 shadow-xl object-cover"
+                className={`${embedded ? "w-16 h-16" : "w-28 h-28"} rounded-full border-4 border-indigo-600 shadow-xl object-cover`}
               />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-white">{callerName}</h2>
-              <p className="text-slate-400 text-xs mt-1 uppercase tracking-widest animate-pulse font-medium">Incoming Call...</p>
+              <h2 className={`${embedded ? "text-lg" : "text-2xl"} font-black text-white`}>{callerName}</h2>
+              <p className="text-slate-400 text-[11px] uppercase tracking-widest animate-pulse font-medium">Incoming Call...</p>
             </div>
           </div>
         ) : (
           /* CONNECTED STAGE */
-          <div className="w-full h-full grid grid-cols-1 md:grid-cols-2 gap-4 relative">
+          <div className={`w-full ${embedded ? "h-36 md:h-44" : "h-full min-h-[300px]"} grid grid-cols-1 md:grid-cols-2 gap-4 relative`}>
             {/* Local Video Stream Card */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden relative shadow-lg flex items-center justify-center">
+            <div className="bg-slate-950 border border-slate-850 rounded-xl overflow-hidden relative shadow-inner flex items-center justify-center">
               {callType === "video" && !videoOff ? (
                 <video 
                   ref={localVideoRef} 
@@ -260,20 +277,20 @@ export default function CallWindow({
                   className="w-full h-full object-cover transform -scale-x-100"
                 />
               ) : (
-                <div className="text-center p-4">
-                  <div className="w-20 h-20 bg-indigo-950 rounded-full border border-indigo-500/30 flex items-center justify-center mx-auto mb-3 text-indigo-400 font-bold">
+                <div className="text-center p-3">
+                  <div className={`${embedded ? "w-10 h-10 mb-1.5" : "w-20 h-20 mb-3"} bg-indigo-950 rounded-full border border-indigo-500/30 flex items-center justify-center mx-auto text-indigo-400 font-bold text-xs`}>
                     Local
                   </div>
-                  <p className="text-xs text-slate-400">Your camera is deactivated</p>
+                  <p className="text-[10px] text-slate-500">Your camera is deactivated</p>
                 </div>
               )}
-              <span className="absolute top-3 left-3 bg-slate-950/80 px-2 py-0.5 rounded text-[10px] font-bold text-slate-300">
+              <span className="absolute top-2 left-2 bg-slate-950/80 px-1.5 py-0.5 rounded text-[9px] font-bold text-slate-400">
                 You (Sender)
               </span>
             </div>
 
             {/* Remote Video Stream Card */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden relative shadow-lg flex items-center justify-center">
+            <div className="bg-slate-950 border border-slate-850 rounded-xl overflow-hidden relative shadow-inner flex items-center justify-center">
               {callType === "video" ? (
                 <video 
                   ref={remoteVideoRef} 
@@ -284,23 +301,23 @@ export default function CallWindow({
                   poster={`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(chatName)}`}
                 />
               ) : (
-                <div className="text-center p-4">
-                  <div className="w-20 h-20 bg-emerald-950 rounded-full border border-emerald-500/30 flex items-center justify-center mx-auto mb-3 text-emerald-400 font-bold animate-pulse">
-                    {chatName.slice(0, 2)}
+                <div className="text-center p-3">
+                  <div className={`${embedded ? "w-10 h-10 mb-1.5" : "w-20 h-20 mb-3"} bg-emerald-950 rounded-full border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400 font-bold animate-pulse text-xs`}>
+                    {chatName.slice(0, 2).toUpperCase()}
                   </div>
-                  <p className="text-xs text-slate-400">Remote Participant Connected</p>
+                  <p className="text-[10px] text-slate-500">Remote Connected</p>
                 </div>
               )}
-              <span className="absolute top-3 left-3 bg-slate-950/80 px-2 py-0.5 rounded text-[10px] font-bold text-slate-300">
+              <span className="absolute top-2 left-2 bg-slate-950/80 px-1.5 py-0.5 rounded text-[9px] font-bold text-slate-400">
                 {chatName}
               </span>
             </div>
 
             {/* Call Recording alert tag */}
             {isRecording && (
-              <div className="absolute top-3 right-3 bg-rose-900/80 border border-rose-500/40 text-rose-300 px-3 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 animate-pulse">
-                <Radio className="w-3.5 h-3.5" />
-                RECORDING CALL
+              <div className="absolute top-2 right-2 bg-rose-900/80 border border-rose-500/40 text-rose-300 px-2.5 py-0.5 rounded-full text-[9px] font-bold flex items-center gap-1.5 animate-pulse">
+                <Radio className="w-3 h-3" />
+                RECORDING
               </div>
             )}
           </div>
@@ -308,46 +325,46 @@ export default function CallWindow({
       </div>
 
       {/* Call Actions Controls Footbar */}
-      <div className="w-full flex justify-center py-4 shrink-0">
+      <div className={`w-full flex justify-center ${embedded ? "py-1" : "py-4"} shrink-0`}>
         {callStatus === "ringing" ? (
           /* RINGING ACTIONS */
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4">
             <button
               onClick={onDecline}
-              className="p-4 bg-rose-600 hover:bg-rose-500 text-white rounded-full shadow-lg shadow-rose-500/20 active:scale-95 transition"
+              className={`bg-rose-600 hover:bg-rose-500 text-white rounded-full shadow-lg shadow-rose-500/20 active:scale-95 transition ${embedded ? "p-2.5" : "p-4"}`}
               title="Decline Call"
             >
-              <PhoneOff className="w-6 h-6" />
+              <PhoneOff className={embedded ? "w-5 h-5" : "w-6 h-6"} />
             </button>
             <button
               onClick={handleAcceptCall}
-              className="p-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full shadow-lg shadow-emerald-500/20 active:scale-95 transition"
+              className={`bg-emerald-600 hover:bg-emerald-500 text-white rounded-full shadow-lg shadow-emerald-500/20 active:scale-95 transition ${embedded ? "p-2.5" : "p-4"}`}
               title="Accept Call"
             >
-              <Volume2 className="w-6 h-6 animate-bounce" />
+              <Volume2 className={`${embedded ? "w-5 h-5" : "w-6 h-6"} animate-bounce`} />
             </button>
           </div>
         ) : (
           /* CONNECTED ACTIONS */
-          <div className="flex items-center gap-4 bg-slate-900 border border-slate-800 px-6 py-3 rounded-full shadow-2xl">
+          <div className={`flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-full shadow-2xl ${embedded ? "px-4 py-2" : "px-6 py-3"}`}>
             
             {/* Audio Toggle */}
             <button
               onClick={toggleMic}
-              className={`p-3 rounded-full transition ${micMuted ? "bg-rose-900/60 text-rose-400 border border-rose-500/20" : "bg-slate-800 hover:bg-slate-700 text-slate-300"}`}
+              className={`rounded-full transition ${embedded ? "p-2" : "p-3"} ${micMuted ? "bg-rose-900/60 text-rose-400 border border-rose-500/20" : "bg-slate-800 hover:bg-slate-700 text-slate-300"}`}
               title={micMuted ? "Unmute Mic" : "Mute Mic"}
             >
-              {micMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              {micMuted ? <MicOff className={embedded ? "w-4 h-4" : "w-5 h-5"} /> : <Mic className={embedded ? "w-4 h-4" : "w-5 h-5"} />}
             </button>
 
             {/* Video Toggle */}
             {callType === "video" && (
               <button
                 onClick={toggleVideo}
-                className={`p-3 rounded-full transition ${videoOff ? "bg-rose-900/60 text-rose-400 border border-rose-500/20" : "bg-slate-800 hover:bg-slate-700 text-slate-300"}`}
+                className={`rounded-full transition ${embedded ? "p-2" : "p-3"} ${videoOff ? "bg-rose-900/60 text-rose-400 border border-rose-500/20" : "bg-slate-800 hover:bg-slate-700 text-slate-300"}`}
                 title={videoOff ? "Activate Camera" : "Deactivate Camera"}
               >
-                {videoOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+                {videoOff ? <VideoOff className={embedded ? "w-4 h-4" : "w-5 h-5"} /> : <Video className={embedded ? "w-4 h-4" : "w-5 h-5"} />}
               </button>
             )}
 
@@ -355,29 +372,29 @@ export default function CallWindow({
             {callType === "video" && (
               <button
                 onClick={toggleScreenShare}
-                className={`p-3 rounded-full transition ${screenSharing ? "bg-indigo-600 text-white" : "bg-slate-800 hover:bg-slate-700 text-slate-300"}`}
+                className={`rounded-full transition ${embedded ? "p-2" : "p-3"} ${screenSharing ? "bg-indigo-600 text-white" : "bg-slate-800 hover:bg-slate-700 text-slate-300"}`}
                 title={screenSharing ? "Stop sharing screen" : "Share screen"}
               >
-                <ScreenShare className="w-5 h-5" />
+                <ScreenShare className={embedded ? "w-4 h-4" : "w-5 h-5"} />
               </button>
             )}
 
             {/* Call recording */}
             <button
               onClick={toggleRecording}
-              className={`p-3 rounded-full transition ${isRecording ? "bg-rose-600 text-white animate-pulse" : "bg-slate-800 hover:bg-slate-700 text-slate-300"}`}
+              className={`rounded-full transition ${embedded ? "p-2" : "p-3"} ${isRecording ? "bg-rose-600 text-white animate-pulse" : "bg-slate-800 hover:bg-slate-700 text-slate-300"}`}
               title={isRecording ? "Stop Call Recording" : "Record call to disk"}
             >
-              <Disc className="w-5 h-5" />
+              <Disc className={embedded ? "w-4 h-4" : "w-5 h-5"} />
             </button>
 
             {/* End call */}
             <button
               onClick={onEndCall}
-              className="p-3 bg-rose-600 hover:bg-rose-500 text-white rounded-full shadow-md shadow-rose-500/10 active:scale-95 transition ml-2"
+              className={`bg-rose-600 hover:bg-rose-500 text-white rounded-full shadow-md shadow-rose-500/10 active:scale-95 transition ${embedded ? "p-2 ml-1" : "p-3 ml-2"}`}
               title="Hang up call"
             >
-              <PhoneOff className="w-5 h-5" />
+              <PhoneOff className={embedded ? "w-4 h-4" : "w-5 h-5"} />
             </button>
           </div>
         )}

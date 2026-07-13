@@ -11,12 +11,17 @@ import { Server as SocketServer } from "socket.io";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import jwt from "jsonwebtoken";
 
 dotenv.config();
 
 const PORT = 3000;
 const app = express();
 const server = http.createServer(app);
+
+const JWT_SECRET = process.env.JWT_SECRET || "chatify_admin_super_secret_key_123";
+const ADMIN_USERNAME = "admin";
+const ADMIN_PASSWORD = "admin123";
 
 // Initialize Socket.IO with CORS support
 const io = new SocketServer(server, {
@@ -27,6 +32,43 @@ const io = new SocketServer(server, {
 });
 
 app.use(express.json({ limit: "50mb" }));
+
+// API: Admin Login via JWT
+app.post("/api/admin/login", (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: "Username and password are required" });
+  }
+
+  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+    const token = jwt.sign(
+      { role: "admin", username },
+      JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+    return res.json({ success: true, token });
+  } else {
+    return res.status(401).json({ error: "Invalid admin credentials" });
+  }
+});
+
+// API: Verify Admin JWT Token
+app.post("/api/admin/verify", (req, res) => {
+  const { token } = req.body;
+  if (!token) {
+    return res.status(400).json({ error: "Token is required" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded && decoded.role === "admin") {
+      return res.json({ success: true, decoded });
+    }
+    return res.status(401).json({ error: "Unauthorized access role" });
+  } catch (err) {
+    return res.status(401).json({ error: "Token expired or invalid signature" });
+  }
+});
 
 // Configure local uploads storage
 const uploadsPath = path.join(process.cwd(), "uploads");

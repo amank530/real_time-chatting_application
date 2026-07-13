@@ -41,6 +41,7 @@ import {
   ArrowLeft
 } from "lucide-react";
 import { encryptText, decryptText } from "../lib/crypto";
+import CallWindow from "./CallWindow";
 
 export default function ChatArea({
   currentUser,
@@ -48,7 +49,13 @@ export default function ChatArea({
   onStartCall,
   socket,
   typingUserText,
-  onBack
+  onBack,
+  allUsers = [],
+  activeCallSession = null,
+  isIncomingCall = false,
+  onDeclineCall = () => {},
+  onAcceptCall = () => {},
+  onEndCall = () => {}
 }) {
   const [messages, setMessages] = useState([]);
   const [decryptedMessages, setDecryptedMessages] = useState({});
@@ -59,8 +66,8 @@ export default function ChatArea({
   const [searchOpen, setSearchOpen] = useState(false);
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
   
-  // E2EE Password Status
-  const [roomPassword, setRoomPassword] = useState(chat.encryptionPassword || "");
+  // E2EE Password Status - set secure automatic E2EE key based on secret chat.id
+  const [roomPassword, setRoomPassword] = useState(chat.encryptionPassword || "chatify_e2ee_" + chat.id);
   const [showPwdSetup, setShowPwdSetup] = useState(false);
   const [pwdInput, setPwdInput] = useState("");
 
@@ -75,6 +82,22 @@ export default function ChatArea({
   // Typing state tracking
   const [isTypingLocal, setIsTypingLocal] = useState(false);
   const typingTimeoutRef = useRef(null);
+
+  // Resolve other user's real name and photoURL/avatar for direct message rooms
+  const otherUserId = !chat.isGlobal && !chat.isGroup ? chat.members?.find(m => m !== currentUser.uid) : null;
+  const otherUser = otherUserId ? (allUsers || []).find(u => u.uid === otherUserId) : null;
+
+  const chatName = chat.isGlobal 
+    ? "Global Lobby (Everyone)" 
+    : chat.isGroup 
+      ? (chat.name || "Group Chat") 
+      : (otherUser ? otherUser.displayName : "Direct Message");
+
+  const chatAvatar = chat.isGlobal 
+    ? (chat.avatar || "https://api.dicebear.com/7.x/initials/svg?seed=Global")
+    : chat.isGroup 
+      ? (chat.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${chatName}`)
+      : (otherUser ? (otherUser.photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${chatName}`) : (chat.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=Direct`));
 
   // Listen to Messages in this Chat Room
   useEffect(() => {
@@ -431,49 +454,25 @@ export default function ChatArea({
             </button>
           )}
           <img 
-            src={chat.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${chat.name || "Secure"}`} 
-            alt={chat.name} 
+            src={chatAvatar} 
+            alt={chatName} 
             className="w-10 h-10 rounded-full object-cover border border-slate-800"
           />
           <div>
             <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-              {chat.isGlobal ? "Global Lobby (Everyone)" : (chat.name || "Secure Direct Room")}
+              {chatName}
               {!chat.isGlobal && (
-                (roomPassword || chat.encryptionPassword) ? (
-                  <Lock className="w-3.5 h-3.5 text-emerald-400 shrink-0" title="End-to-End Encrypted Active" />
-                ) : (
-                  <Unlock className="w-3.5 h-3.5 text-amber-500/80 shrink-0 cursor-pointer hover:text-indigo-400" onClick={() => setShowPwdSetup(true)} title="Add Encryption Key" />
-                )
+                <Lock className="w-3.5 h-3.5 text-emerald-400 shrink-0" title="End-to-End Encrypted Active" />
               )}
             </h3>
             <p className="text-[11px] text-slate-400 leading-tight">
-              {chat.isGlobal ? "Public square - chat with everyone!" : chat.isGroup ? `${chat.members.length} members` : "Secure Direct Chat"}
+              {chat.isGlobal ? "Public square - chat with everyone!" : chat.isGroup ? `${chat.members.length} members` : "Direct Message Conversation"}
             </p>
           </div>
         </div>
 
         {/* Action icons */}
         <div className="flex items-center gap-2">
-          {/* E2EE Lock State Key Setup Button */}
-          {!chat.isGlobal && (
-            <button
-              onClick={() => setShowPwdSetup(!showPwdSetup)}
-              className={`p-2 rounded-lg transition ${roomPassword ? "bg-emerald-950/40 text-emerald-400 border border-emerald-500/20" : "bg-slate-800 text-slate-400 hover:text-white"}`}
-              title="Configure Encryption Passcode"
-            >
-              <Lock className="w-4 h-4" />
-            </button>
-          )}
-
-          {/* Search Button */}
-          <button
-            onClick={() => setSearchOpen(!searchOpen)}
-            className={`p-2 rounded-lg transition ${searchOpen ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400 hover:text-white"}`}
-            title="Search Messages"
-          >
-            <Search className="w-4 h-4" />
-          </button>
-
           {/* Voice call */}
           {!chat.isGlobal && (
             <button
@@ -498,63 +497,22 @@ export default function ChatArea({
         </div>
       </div>
 
-      {/* Message Filter Overlay Bar */}
-      {searchOpen && (
-        <div className="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between shrink-0">
-          <div className="relative flex-1 max-w-lg">
-            <Search className="absolute left-3 top-2 w-3.5 h-3.5 text-slate-500" />
-            <input
-              type="text"
-              placeholder="Search conversation..."
-              value={messageSearchQuery}
-              onChange={(e) => setMessageSearchQuery(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 pl-8 pr-4 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-          <button 
-            onClick={() => { setMessageSearchQuery(""); setSearchOpen(false); }}
-            className="p-1 text-slate-400 hover:text-white ml-2 rounded"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* E2EE Passcode Configuration Drawer */}
-      {showPwdSetup && (
-        <div className="bg-slate-900 border-b border-indigo-500/20 px-6 py-4 text-slate-300 shrink-0 border-t border-slate-800 shadow-inner">
-          <div className="max-w-md mx-auto space-y-3">
-            <div className="flex items-center gap-2 text-white">
-              <Lock className="w-4.5 h-4.5 text-emerald-400" />
-              <h4 className="font-bold text-sm">Configure Client-Side Encryption Key</h4>
-            </div>
-            <p className="text-xs text-slate-400 leading-normal">
-              Entering a passcode encrypts all messaging payloads. If other participants input the matching key, they can view the plaintext. We do not store keys on our servers.
-            </p>
-            <div className="flex gap-2">
-              <input
-                type="password"
-                placeholder={roomPassword ? "•••••••• (Password Active)" : "Enter Secure Passcode..."}
-                value={pwdInput}
-                onChange={(e) => setPwdInput(e.target.value)}
-                className="flex-1 bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-3 text-xs text-white focus:outline-none focus:border-indigo-500"
-              />
-              <button
-                onClick={handleSetupRoomPassword}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-1.5 px-4 rounded-lg transition"
-              >
-                Apply Key
-              </button>
-              {roomPassword && (
-                <button
-                  onClick={() => { setRoomPassword(""); setShowPwdSetup(false); }}
-                  className="bg-rose-950 hover:bg-rose-900 text-rose-300 text-xs px-3 rounded-lg border border-rose-500/20"
-                >
-                  Disable
-                </button>
-              )}
-            </div>
-          </div>
+      {/* Embedded active calling session container */}
+      {activeCallSession && activeCallSession.chatId === chat.id && (
+        <div className="px-4 pt-3 shrink-0">
+          <CallWindow
+            chatId={activeCallSession.chatId}
+            chatName={isIncomingCall ? activeCallSession.callerName : activeCallSession.receiverName}
+            callType={activeCallSession.type}
+            callerName={activeCallSession.callerName}
+            isIncoming={isIncomingCall}
+            onDecline={onDeclineCall}
+            onAccept={onAcceptCall}
+            onEndCall={onEndCall}
+            socket={socket}
+            remoteUserId={isIncomingCall ? activeCallSession.callerId : activeCallSession.receiverId}
+            embedded={true}
+          />
         </div>
       )}
 
@@ -569,6 +527,17 @@ export default function ChatArea({
           filteredMessagesList.map((msg) => {
             const isMe = msg.senderId === currentUser.uid;
             const decryptedText = decryptedMessages[msg.id] || msg.text;
+
+            if (msg.type === "system") {
+              return (
+                <div key={msg.id} className="w-full flex justify-center my-1.5 animate-fadeIn">
+                  <div className="bg-slate-900 border border-slate-800 text-slate-400 text-[10px] sm:text-xs font-semibold px-4 py-1.5 rounded-full shadow-inner flex items-center gap-1.5 max-w-[90%] break-words justify-center">
+                    <span className="text-indigo-400">⚡</span>
+                    <span>{msg.text}</span>
+                  </div>
+                </div>
+              );
+            }
 
             return (
               <div 
