@@ -1,0 +1,194 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile containing identity, status, and AI assistant settings.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The unique identifier of the user."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "The chosen name of the user."
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "The custom avatar/photo URL of the user."
+        },
+        "phoneNumber": {
+          "type": "string",
+          "description": "Optional contact number."
+        },
+        "online": {
+          "type": "boolean",
+          "description": "Whether the user is currently online."
+        },
+        "role": {
+          "type": "string",
+          "description": "The system role of the user, e.g., 'admin' or 'user'."
+        },
+        "aiSettings": {
+          "type": "object",
+          "description": "AI auto-reply and memory settings for the user."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of profile creation."
+        }
+      },
+      "required": ["uid", "displayName", "photoURL", "online", "role"]
+    },
+    "Chat": {
+      "title": "Chat Room",
+      "description": "A direct message or group chat room.",
+      "type": "object",
+      "properties": {
+        "isGroup": {
+          "type": "boolean",
+          "description": "Whether this chat is a group chat."
+        },
+        "members": {
+          "type": "array",
+          "description": "List of user UIDs who are members of this chat."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the group chat."
+        },
+        "avatar": {
+          "type": "string",
+          "description": "Avatar URL of the group chat."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the chat was started."
+        },
+        "lastMessage": {
+          "type": "object",
+          "description": "Metadata of the last message sent in the chat room."
+        },
+        "encryptionPassword": {
+          "type": "string",
+          "description": "Optional passcode used for Client-Side End-to-End Encryption."
+        },
+        "admins": {
+          "type": "array",
+          "description": "List of user UIDs who are admins of this group chat."
+        }
+      },
+      "required": ["isGroup", "members", "createdAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "An individual message sent within a chat room.",
+      "type": "object",
+      "properties": {
+        "senderId": {
+          "type": "string",
+          "description": "UID of the sending user."
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Display name of the sender."
+        },
+        "text": {
+          "type": "string",
+          "description": "The text content (optionally encrypted) of the message."
+        },
+        "type": {
+          "type": "string",
+          "description": "Type of message content (text, image, video, audio, file)."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the message was sent."
+        },
+        "readBy": {
+          "type": "array",
+          "description": "List of user UIDs who have read this message."
+        },
+        "reactions": {
+          "type": "object",
+          "description": "Mapping of user UIDs to emoji reactions."
+        },
+        "encrypted": {
+          "type": "boolean",
+          "description": "Whether the message text is E2EE encrypted."
+        },
+        "replyTo": {
+          "type": "object",
+          "description": "Optional message context being replied to."
+        },
+        "fileUrl": {
+          "type": "string",
+          "description": "Optional URL of a shared file attachment."
+        },
+        "fileName": {
+          "type": "string",
+          "description": "Optional filename of the shared file."
+        },
+        "fileSize": {
+          "type": "integer",
+          "description": "Optional size of the shared file in bytes."
+        },
+        "edited": {
+          "type": "boolean",
+          "description": "Whether the message has been edited."
+        },
+        "deleted": {
+          "type": "boolean",
+          "description": "Whether the message has been soft-deleted."
+        }
+      },
+      "required": ["senderId", "senderName", "text", "type", "timestamp", "readBy"]
+    },
+    "AiMemory": {
+      "title": "AI Assistant Memory",
+      "description": "Memory note or task tracked for the AI Assistant's context.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The UID of the user this memory belongs to."
+        },
+        "type": {
+          "type": "string",
+          "description": "The category of memory (e.g. note, task)."
+        },
+        "content": {
+          "type": "string",
+          "description": "The stored content of the memory."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the memory was logged."
+        }
+      },
+      "required": ["userId", "type", "content", "timestamp"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profile records containing statuses and AI configurations."
+    },
+    "chats/{chatId}": {
+      "schema": "Chat",
+      "description": "Active chat rooms, including group chats and DMs."
+    },
+    "chats/{chatId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Chronological log of messages sent inside a specific chat room."
+    },
+    "ai_memories/{memoryId}": {
+      "schema": "AiMemory",
+      "description": "Stored semantic data for user AI notes and assistant tasks."
+    }
+  }
+}

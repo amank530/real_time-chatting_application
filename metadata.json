@@ -1,0 +1,6 @@
+{
+  "name": "Universal Chat",
+  "description": "A feature-rich chat application with E2E encryption, WebRTC calls, AI Auto-Reply, and a Personal AI Assistant.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
