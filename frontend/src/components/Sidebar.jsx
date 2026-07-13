@@ -50,7 +50,8 @@ export default function Sidebar({
   showCallHistory,
   onToggleCallHistory,
   allUsers = [],
-  onStartCall
+  onStartCall,
+  onViewUserProfile
 }) {
   const [chats, setChats] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -347,7 +348,7 @@ export default function Sidebar({
       })()}
 
       {/* Main Tab Content inside Sidebar */}
-      {activeTab === "chats" ? (
+      {(activeTab === "chats" || activeTab === "profile") ? (
         <>
           
           {/* Chat Controls */}
@@ -437,10 +438,35 @@ export default function Sidebar({
                 return (
                   <button
                     key={room.id}
-                    onClick={() => onSelectChat(room)}
+                    onClick={() => {
+                      if (activeTab === "profile") {
+                        if (!room.isGroup && onViewUserProfile) {
+                          const otherId = room.members.find(m => m !== currentUser.uid);
+                          const otherUserInfo = allUsers.find(u => u.uid === otherId);
+                          if (otherUserInfo) {
+                            onViewUserProfile(otherUserInfo);
+                            return;
+                          }
+                        }
+                      }
+                      onSelectChat(room);
+                    }}
                     className={`w-full flex items-center gap-3 p-2.5 rounded-lg text-left transition ${isSelected ? "bg-indigo-600/90 text-white" : "hover:bg-slate-800/60"}`}
                   >
-                    <div className="relative shrink-0">
+                    <div 
+                      className="relative shrink-0 cursor-pointer hover:opacity-85"
+                      onClick={(e) => {
+                        if (!room.isGroup && onViewUserProfile) {
+                          const otherId = room.members.find(m => m !== currentUser.uid);
+                          const otherUserInfo = allUsers.find(u => u.uid === otherId);
+                          if (otherUserInfo) {
+                            e.stopPropagation();
+                            onViewUserProfile(otherUserInfo);
+                          }
+                        }
+                      }}
+                      title={!room.isGroup ? "View Profile" : undefined}
+                    >
                       <img src={avatar} alt={name} className="w-10 h-10 rounded-full object-cover border border-slate-700" />
                       {!room.isGroup && (
                         <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 ${isOnline ? "bg-green-500 border-slate-900" : "bg-slate-500 border-slate-900"}`} />
@@ -519,9 +545,15 @@ export default function Sidebar({
       {/* User Profile Footer */}
       <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
         <div 
-          onClick={() => setActiveTab("profile")}
+          onClick={() => {
+            if (onViewUserProfile) {
+              onViewUserProfile(currentUser);
+            } else {
+              setActiveTab("profile");
+            }
+          }}
           className="flex items-center gap-3 min-w-0 cursor-pointer hover:bg-slate-900/40 p-1 rounded-xl transition"
-          title="Go to My Profile & Documents"
+          title="Go to My Profile"
         >
           <div className="relative shrink-0">
             <img src={currentUser.photoURL} alt={currentUser.displayName} className="w-9 h-9 rounded-full object-cover border border-slate-700" />
@@ -545,13 +577,6 @@ export default function Sidebar({
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button
-            onClick={() => setActiveTab("profile")}
-            className={`p-1.5 rounded-md transition ${activeTab === "profile" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
-            title="My Profile & Documents"
-          >
-            <FolderOpen className="w-4 h-4" />
-          </button>
           <button
             onClick={() => setShowSettingsModal(true)}
             className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition"

@@ -25,18 +25,28 @@ import { getDb } from "../lib/firebase.js";
 import { collection, onSnapshot, query, where, addDoc, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { motion, AnimatePresence } from "motion/react";
 
-export default function ProfilePanel({ currentUser, onBack }) {
+export default function ProfilePanel({ currentUser, viewingUser, onBack }) {
+  const activeUser = viewingUser || currentUser;
+  const isSelf = activeUser.uid === currentUser.uid;
+
   const [chats, setChats] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Edit profile state
-  const [displayName, setDisplayName] = useState(currentUser.displayName || "");
-  const [photoURL, setPhotoURL] = useState(currentUser.photoURL || "");
+  const [displayName, setDisplayName] = useState(activeUser.displayName || "");
+  const [photoURL, setPhotoURL] = useState(activeUser.photoURL || "");
   const [editingProfile, setEditingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSuccessMsg, setProfileSuccessMsg] = useState("");
+
+  // Sync state if activeUser changes
+  useEffect(() => {
+    setDisplayName(activeUser.displayName || "");
+    setPhotoURL(activeUser.photoURL || "");
+    setEditingProfile(false);
+  }, [activeUser]);
 
   // Document upload states
   const [selectedFile, setSelectedFile] = useState(null);
@@ -73,7 +83,7 @@ export default function ProfilePanel({ currentUser, onBack }) {
 
     // 3. Sync User's personal uploaded documents logs from Firestore
     // This provides durability and tracks what was shared by whom.
-    const qDocs = query(collection(db, "user_documents"), where("uploadedBy", "==", currentUser.uid));
+    const qDocs = query(collection(db, "user_documents"), where("uploadedBy", "==", activeUser.uid));
     const unsubDocs = onSnapshot(qDocs, (snap) => {
       const dList = [];
       snap.forEach((d) => {
@@ -97,7 +107,7 @@ export default function ProfilePanel({ currentUser, onBack }) {
       unsubChats();
       unsubDocs();
     };
-  }, [currentUser.uid]);
+  }, [currentUser.uid, activeUser.uid]);
 
   // Handle Drag Events
   const handleDragOver = (e) => {
@@ -295,8 +305,12 @@ export default function ProfilePanel({ currentUser, onBack }) {
             <User className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white">My Account & Documents</h3>
-            <p className="text-[10px] text-slate-500">Manage your profile, system settings, and cloud files</p>
+            <h3 className="text-sm font-bold text-white">
+              {isSelf ? "My Account & Documents" : `${activeUser.displayName}'s Profile`}
+            </h3>
+            <p className="text-[10px] text-slate-500">
+              {isSelf ? "Manage your profile, system settings, and cloud files" : "View user details and shared assets"}
+            </p>
           </div>
         </div>
         
@@ -326,26 +340,28 @@ export default function ProfilePanel({ currentUser, onBack }) {
               {/* Avatar Preview */}
               <div className="relative inline-block mt-2">
                 <img 
-                  src={currentUser.photoURL} 
-                  alt={currentUser.displayName} 
+                  src={activeUser.photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(activeUser.displayName || "User")}`} 
+                  alt={activeUser.displayName} 
                   className="w-24 h-24 rounded-full mx-auto object-cover border-4 border-slate-800 shadow-xl"
                 />
-                <div className="absolute bottom-0 right-0 p-1.5 bg-indigo-600 rounded-full border border-slate-900">
-                  <Settings className="w-3.5 h-3.5 text-white" />
-                </div>
+                {isSelf && (
+                  <div className="absolute bottom-0 right-0 p-1.5 bg-indigo-600 rounded-full border border-slate-900">
+                    <Settings className="w-3.5 h-3.5 text-white" />
+                  </div>
+                )}
               </div>
 
-              <h2 className="text-base font-black text-white mt-4">{currentUser.displayName}</h2>
-              <p className="text-xs text-indigo-400 font-semibold">{currentUser.role === "admin" ? "Community Administrator" : "Verified User"}</p>
+              <h2 className="text-base font-black text-white mt-4">{activeUser.displayName}</h2>
+              <p className="text-xs text-indigo-400 font-semibold">{activeUser.role === "admin" ? "Community Administrator" : "Verified User"}</p>
               
               <div className="mt-4 pt-4 border-t border-slate-800 space-y-2 text-left text-xs">
                 <div className="flex items-center gap-2 text-slate-400">
                   <Smartphone className="w-3.5 h-3.5 text-slate-500" />
-                  <span className="font-mono">{currentUser.phoneNumber || "No number recorded"}</span>
+                  <span className="font-mono">{activeUser.phoneNumber || "No number recorded"}</span>
                 </div>
                 <div className="flex items-center gap-2 text-slate-400">
                   <Shield className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Role: <strong className="text-slate-300 uppercase font-mono">{currentUser.role || "User"}</strong></span>
+                  <span>Role: <strong className="text-slate-300 uppercase font-mono">{activeUser.role || "User"}</strong></span>
                 </div>
                 <div className="flex items-center gap-2 text-slate-400">
                   <Calendar className="w-3.5 h-3.5 text-slate-500" />
@@ -360,52 +376,54 @@ export default function ProfilePanel({ currentUser, onBack }) {
               )}
 
               {/* Edit Mode Controls */}
-              {editingProfile ? (
-                <form onSubmit={handleSaveProfile} className="mt-4 space-y-3 text-left border-t border-slate-800 pt-4">
-                  <div>
-                    <label className="block text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Display Name</label>
-                    <input
-                      type="text"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Avatar Image URL (Optional)</label>
-                    <input
-                      type="text"
-                      placeholder="https://example.com/avatar.png"
-                      value={photoURL}
-                      onChange={(e) => setPhotoURL(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div className="flex gap-1.5 pt-1">
-                    <button
-                      type="submit"
-                      disabled={savingProfile}
-                      className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-55 text-white font-bold text-xs py-1.5 rounded transition"
-                    >
-                      {savingProfile ? "Saving..." : "Save"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditingProfile(false)}
-                      className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs py-1.5 rounded transition"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <button
-                  onClick={() => setEditingProfile(true)}
-                  className="mt-4 w-full bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs py-2 rounded-lg transition font-bold"
-                >
-                  Edit Profile Details
-                </button>
+              {isSelf && (
+                editingProfile ? (
+                  <form onSubmit={handleSaveProfile} className="mt-4 space-y-3 text-left border-t border-slate-800 pt-4">
+                    <div>
+                      <label className="block text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Display Name</label>
+                      <input
+                        type="text"
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Avatar Image URL (Optional)</label>
+                      <input
+                        type="text"
+                        placeholder="https://example.com/avatar.png"
+                        value={photoURL}
+                        onChange={(e) => setPhotoURL(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <div className="flex gap-1.5 pt-1">
+                      <button
+                        type="submit"
+                        disabled={savingProfile}
+                        className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-55 text-white font-bold text-xs py-1.5 rounded transition"
+                      >
+                        {savingProfile ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingProfile(false)}
+                        className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs py-1.5 rounded transition"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <button
+                    onClick={() => setEditingProfile(true)}
+                    className="mt-4 w-full bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs py-2 rounded-lg transition font-bold"
+                  >
+                    Edit Profile Details
+                  </button>
+                )
               )}
             </div>
           </div>
@@ -413,85 +431,14 @@ export default function ProfilePanel({ currentUser, onBack }) {
           {/* Column 2 & 3: File Upload and Documents Shared */}
           <div className="md:col-span-2 space-y-6">
             
-            {/* Box A: Interactive Drag and Drop Upload Zone */}
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-              <div className="flex items-center gap-2">
-                <HardDrive className="w-4 h-4 text-indigo-400" />
-                <h3 className="text-sm font-bold text-white">Send & Upload New Document</h3>
-              </div>
-
-              {documentSuccessMsg && (
-                <div className="p-3 bg-indigo-950/40 border border-indigo-500/20 text-indigo-300 text-xs rounded-xl flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
-                  <span>{documentSuccessMsg}</span>
-                </div>
-              )}
-
-              {documentErrorMsg && (
-                <div className="p-3 bg-rose-950/40 border border-rose-500/20 text-rose-400 text-xs rounded-xl flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{documentErrorMsg}</span>
-                </div>
-              )}
-
-              {/* Drag Zone */}
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-xl p-6 text-center transition flex flex-col items-center justify-center cursor-pointer ${isDragOver ? "bg-indigo-950/20 border-indigo-500" : "border-slate-800 bg-slate-950/40 hover:border-slate-700"}`}
-              >
-                <input
-                  type="file"
-                  id="profile-doc-picker"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                <label htmlFor="profile-doc-picker" className="w-full h-full cursor-pointer flex flex-col items-center justify-center">
-                  <div className="p-3 bg-slate-900 rounded-2xl text-slate-400 mb-2.5">
-                    <Upload className="w-6 h-6 text-indigo-400" />
-                  </div>
-                  <span className="text-xs font-bold text-white">
-                    {selectedFile ? selectedFile.name : "Drag and drop any document here"}
-                  </span>
-                  <span className="text-[10px] text-slate-500 mt-1">
-                    {selectedFile ? formatBytes(selectedFile.size) : "or click to pick files (PDF, images, spreadsheets, archives)"}
-                  </span>
-                </label>
-              </div>
-
-              {/* Upload Controls */}
-              {selectedFile && (
-                <div className="flex items-center justify-between gap-4 bg-slate-950 p-3 rounded-xl border border-slate-850">
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-white truncate">{selectedFile.name}</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Type: {selectedFile.type || "Document"}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleUploadDocument}
-                      disabled={uploadingDoc}
-                      className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs py-1.5 px-4 rounded-lg transition"
-                    >
-                      {uploadingDoc ? "Uploading..." : "Upload File"}
-                    </button>
-                    <button
-                      onClick={() => setSelectedFile(null)}
-                      className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs py-1.5 px-3 rounded-lg"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
             {/* Box B: File History & Share Dashboard */}
             <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <FolderOpen className="w-4 h-4 text-emerald-400" />
-                  <h3 className="text-sm font-bold text-white">My Cloud Documents List</h3>
+                  <h3 className="text-sm font-bold text-white">
+                    {isSelf ? "My Cloud Documents List" : `${activeUser.displayName}'s Shared Documents`}
+                  </h3>
                 </div>
                 <span className="text-[10px] font-mono bg-slate-800 text-slate-400 px-2.5 py-0.5 rounded-full border border-slate-750">
                   {documents.length} Docs
@@ -536,7 +483,9 @@ export default function ProfilePanel({ currentUser, onBack }) {
                 <div className="text-center py-12 text-slate-600 text-xs border border-dashed border-slate-800 rounded-xl bg-slate-950/20">
                   <FileText className="w-8 h-8 text-slate-700 mx-auto mb-2" />
                   <p className="font-bold text-slate-400 mb-0.5">No Uploaded Documents Found</p>
-                  <p className="text-[10px]">Upload a spreadsheet, PDF, or image in the drag box above to populate this panel.</p>
+                  <p className="text-[10px]">
+                    {isSelf ? "Upload a spreadsheet, PDF, or image in the drag box above to populate this panel." : "This user hasn't uploaded or shared any cloud documents yet."}
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
@@ -580,13 +529,15 @@ export default function ProfilePanel({ currentUser, onBack }) {
                             <Share2 className="w-3.5 h-3.5" />
                             Share
                           </button>
-                          <button
-                            onClick={() => handleDeleteDocLog(docItem.id)}
-                            className="p-1.5 hover:bg-rose-950/30 text-slate-500 hover:text-rose-400 rounded-md transition"
-                            title="Remove log"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {isSelf && (
+                            <button
+                              onClick={() => handleDeleteDocLog(docItem.id)}
+                              className="p-1.5 hover:bg-rose-950/30 text-slate-500 hover:text-rose-400 rounded-md transition"
+                              title="Remove log"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     );

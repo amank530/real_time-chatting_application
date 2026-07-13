@@ -55,7 +55,8 @@ export default function ChatArea({
   isIncomingCall = false,
   onDeclineCall = () => {},
   onAcceptCall = () => {},
-  onEndCall = () => {}
+  onEndCall = () => {},
+  onViewUserProfile
 }) {
   const [messages, setMessages] = useState([]);
   const [decryptedMessages, setDecryptedMessages] = useState({});
@@ -453,21 +454,31 @@ export default function ChatArea({
               <ArrowLeft className="w-5 h-5" />
             </button>
           )}
-          <img 
-            src={chatAvatar} 
-            alt={chatName} 
-            className="w-10 h-10 rounded-full object-cover border border-slate-800"
-          />
-          <div>
-            <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-              {chatName}
-              {!chat.isGlobal && (
-                <Lock className="w-3.5 h-3.5 text-emerald-400 shrink-0" title="End-to-End Encrypted Active" />
-              )}
-            </h3>
-            <p className="text-[11px] text-slate-400 leading-tight">
-              {chat.isGlobal ? "Public square - chat with everyone!" : chat.isGroup ? `${chat.members.length} members` : "Direct Message Conversation"}
-            </p>
+          <div 
+            onClick={() => {
+              if (!chat.isGlobal && !chat.isGroup && otherUser && onViewUserProfile) {
+                onViewUserProfile(otherUser);
+              }
+            }}
+            className={`flex items-center gap-3 ${(!chat.isGlobal && !chat.isGroup && otherUser) ? "cursor-pointer hover:opacity-85 transition" : ""}`}
+            title={(!chat.isGlobal && !chat.isGroup && otherUser) ? "View User Profile" : undefined}
+          >
+            <img 
+              src={chatAvatar} 
+              alt={chatName} 
+              className="w-10 h-10 rounded-full object-cover border border-slate-800 shrink-0"
+            />
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                {chatName}
+                {!chat.isGlobal && (
+                  <Lock className="w-3.5 h-3.5 text-emerald-400 shrink-0" title="End-to-End Encrypted Active" />
+                )}
+              </h3>
+              <p className="text-[11px] text-slate-400 leading-tight">
+                {chat.isGlobal ? "Public square - chat with everyone!" : chat.isGroup ? `${chat.members.length} members` : "Direct Message Conversation"}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -539,138 +550,177 @@ export default function ChatArea({
               );
             }
 
+            // Resolve sender's photoURL and user object
+            let senderAvatar = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(msg.senderName)}`;
+            if (isMe) {
+              senderAvatar = currentUser.photoURL || senderAvatar;
+            } else {
+              const u = allUsers.find(usr => usr.uid === msg.senderId);
+              if (u?.photoURL) {
+                senderAvatar = u.photoURL;
+              }
+            }
+
+            const handleViewSenderProfile = () => {
+              if (onViewUserProfile) {
+                if (isMe) {
+                  onViewUserProfile(currentUser);
+                } else {
+                  const u = allUsers.find(usr => usr.uid === msg.senderId);
+                  if (u) {
+                    onViewUserProfile(u);
+                  }
+                }
+              }
+            };
+
             return (
               <div 
                 key={msg.id}
-                className={`flex flex-col group relative max-w-[80%] ${isMe ? "self-end items-end" : "self-start items-start"}`}
+                className={`flex gap-3 max-w-[85%] group relative ${isMe ? "self-end flex-row-reverse" : "self-start flex-row"}`}
               >
-                {/* Sender Name */}
-                {!isMe && (
-                  <span className="text-[10px] text-slate-400 font-bold mb-1.5 ml-1">
-                    {msg.senderName}
-                  </span>
-                )}
+                {/* Clickable Sender Avatar */}
+                <img 
+                  src={senderAvatar} 
+                  alt={msg.senderName} 
+                  onClick={handleViewSenderProfile}
+                  className="w-7 h-7 rounded-full object-cover border border-slate-800 shrink-0 mt-0.5 cursor-pointer hover:opacity-80 transition shadow-sm"
+                  title={`View profile of ${msg.senderName}`}
+                />
 
-                {/* Reply To Preview in bubble */}
-                {msg.replyTo && (
-                  <div className="bg-slate-900/80 border-l-2 border-indigo-500 p-1.5 rounded-t-lg text-[10px] text-slate-400 mb-0.5 max-w-sm">
-                    <strong className="block text-slate-300 font-bold">{msg.replyTo.senderName}</strong>
-                    <span className="truncate block">{msg.replyTo.text}</span>
-                  </div>
-                )}
-
-                {/* Main bubble */}
-                <div className={`p-3 rounded-xl shadow-md ${isMe ? "bg-indigo-600 rounded-tr-none text-white" : "bg-slate-900 rounded-tl-none text-slate-100"}`}>
-                  
-                  {/* Text or Rich Media attachments */}
-                  {msg.type === "image" && msg.fileUrl ? (
-                    <div className="space-y-1">
-                      <img 
-                        src={msg.fileUrl} 
-                        alt={msg.fileName} 
-                        className="max-h-60 rounded-lg cursor-pointer hover:opacity-90 object-contain"
-                        onClick={() => setActiveLightboxImage(msg.fileUrl || null)}
-                      />
-                      <p className="text-[10px] opacity-75">{msg.fileName}</p>
-                    </div>
-                  ) : msg.type === "video" && msg.fileUrl ? (
-                    <video controls src={msg.fileUrl} className="max-h-64 rounded-lg bg-black" />
-                  ) : msg.type === "audio" && msg.fileUrl ? (
-                    <div className="flex items-center gap-2.5 bg-slate-950/60 p-2 rounded-lg">
-                      <Music className="w-4 h-4 text-indigo-400" />
-                      <audio controls src={msg.fileUrl} className="w-48 h-8 rounded animate-none" />
-                    </div>
-                  ) : msg.type === "file" && msg.fileUrl ? (
-                    <div className="flex items-center gap-3 bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
-                      <FileText className="w-5 h-5 text-indigo-400 shrink-0" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold truncate text-slate-100">{msg.fileName}</p>
-                        <p className="text-[10px] text-slate-400">{formatBytes(msg.fileSize)}</p>
-                      </div>
-                      <a 
-                        href={msg.fileUrl} 
-                        download={msg.fileName}
-                        className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 transition shrink-0"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                      </a>
-                    </div>
-                  ) : (
-                    /* Plain or encrypted text */
-                    <p className={`text-xs leading-relaxed whitespace-pre-wrap break-all ${msg.deleted ? "italic text-slate-400" : ""}`}>
-                      {decryptedText}
-                    </p>
+                <div className={`flex flex-col relative ${isMe ? "items-end" : "items-start"}`}>
+                  {/* Sender Name */}
+                  {!isMe && (
+                    <span 
+                      onClick={handleViewSenderProfile}
+                      className="text-[10px] text-slate-400 font-bold mb-1 ml-1 cursor-pointer hover:text-indigo-400 transition"
+                      title="View Profile"
+                    >
+                      {msg.senderName}
+                    </span>
                   )}
 
-                  {/* Bubble details */}
-                  <div className="flex items-center justify-end gap-1.5 mt-1.5 text-[9px] opacity-70">
-                    {msg.encrypted && !msg.deleted && <Lock className="w-2.5 h-2.5 text-emerald-400" title="End-to-End Encrypted" />}
-                    {msg.edited && <span>(edited)</span>}
-                    <span>
-                      {msg.timestamp?.seconds ? new Date(msg.timestamp.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                    {isMe && (
-                      <CheckCheck className={`w-3 h-3 ${msg.readBy.length > 1 ? "text-indigo-300" : "text-slate-400"}`} />
-                    )}
-                  </div>
-                </div>
+                  {/* Reply To Preview in bubble */}
+                  {msg.replyTo && (
+                    <div className="bg-slate-900/80 border-l-2 border-indigo-500 p-1.5 rounded-t-lg text-[10px] text-slate-400 mb-0.5 max-w-sm">
+                      <strong className="block text-slate-300 font-bold">{msg.replyTo.senderName}</strong>
+                      <span className="truncate block">{msg.replyTo.text}</span>
+                    </div>
+                  )}
 
-                {/* Reaction tags displayed on the bubble */}
-                {msg.reactions && Object.keys(msg.reactions).length > 0 && (
-                  <div className="flex items-center gap-1 mt-1 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded-full shadow-sm text-[10px] shrink-0">
-                    {Object.entries(msg.reactions).map(([uid, emoji]) => (
-                      <span key={uid} title={`Reacted by ${uid}`} className="cursor-default select-none">{emoji}</span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Hover Action drawer for message reactions / edit / delete */}
-                {!msg.deleted && (
-                  <div className={`absolute top-0 opacity-0 group-hover:opacity-100 flex items-center gap-1 bg-slate-900/90 border border-slate-800 px-2 py-1 rounded-lg shadow-lg z-20 transition-opacity ${isMe ? "-left-40" : "-right-40"}`}>
+                  {/* Main bubble */}
+                  <div className={`p-3 rounded-xl shadow-md ${isMe ? "bg-indigo-600 rounded-tr-none text-white" : "bg-slate-900 rounded-tl-none text-slate-100"}`}>
                     
-                    {/* Emoticons */}
-                    <div className="flex items-center gap-0.5 mr-2.5 border-r border-slate-800 pr-2">
-                      {["👍", "❤️", "😂", "😮", "😢", "🙏"].map((emoji) => (
-                        <button
-                          key={emoji}
-                          onClick={() => handleAddReaction(msg.id, emoji)}
-                          className="hover:scale-125 transition text-xs font-sans"
+                    {/* Text or Rich Media attachments */}
+                    {msg.type === "image" && msg.fileUrl ? (
+                      <div className="space-y-1">
+                        <img 
+                          src={msg.fileUrl} 
+                          alt={msg.fileName} 
+                          className="max-h-60 rounded-lg cursor-pointer hover:opacity-90 object-contain"
+                          onClick={() => setActiveLightboxImage(msg.fileUrl || null)}
+                        />
+                        <p className="text-[10px] opacity-75">{msg.fileName}</p>
+                      </div>
+                    ) : msg.type === "video" && msg.fileUrl ? (
+                      <video controls src={msg.fileUrl} className="max-h-64 rounded-lg bg-black" />
+                    ) : msg.type === "audio" && msg.fileUrl ? (
+                      <div className="flex items-center gap-2.5 bg-slate-950/60 p-2 rounded-lg">
+                        <Music className="w-4 h-4 text-indigo-400" />
+                        <audio controls src={msg.fileUrl} className="w-48 h-8 rounded animate-none" />
+                      </div>
+                    ) : msg.type === "file" && msg.fileUrl ? (
+                      <div className="flex items-center gap-3 bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
+                        <FileText className="w-5 h-5 text-indigo-400 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold truncate text-slate-100">{msg.fileName}</p>
+                          <p className="text-[10px] text-slate-400">{formatBytes(msg.fileSize)}</p>
+                        </div>
+                        <a 
+                          href={msg.fileUrl} 
+                          download={msg.fileName}
+                          className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 transition shrink-0"
                         >
-                          {emoji}
-                        </button>
+                          <Download className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+                    ) : (
+                      /* Plain or encrypted text */
+                      <p className={`text-xs leading-relaxed whitespace-pre-wrap break-all ${msg.deleted ? "italic text-slate-400" : ""}`}>
+                        {decryptedText}
+                      </p>
+                    )}
+
+                    {/* Bubble details */}
+                    <div className="flex items-center justify-end gap-1.5 mt-1.5 text-[9px] opacity-70">
+                      {msg.encrypted && !msg.deleted && <Lock className="w-2.5 h-2.5 text-emerald-400" title="End-to-End Encrypted" />}
+                      {msg.edited && <span>(edited)</span>}
+                      <span>
+                        {msg.timestamp?.seconds ? new Date(msg.timestamp.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      {isMe && (
+                        <CheckCheck className={`w-3 h-3 ${msg.readBy.length > 1 ? "text-indigo-300" : "text-slate-400"}`} />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Reaction tags displayed on the bubble */}
+                  {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+                    <div className="flex items-center gap-1 mt-1 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded-full shadow-sm text-[10px] shrink-0">
+                      {Object.entries(msg.reactions).map(([uid, emoji]) => (
+                        <span key={uid} title={`Reacted by ${uid}`} className="cursor-default select-none">{emoji}</span>
                       ))}
                     </div>
+                  )}
 
-                    {/* Thread reply */}
-                    <button
-                      onClick={() => setReplyingTo(msg)}
-                      className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white rounded"
-                      title="Reply"
-                    >
-                      <Reply className="w-3 h-3" />
-                    </button>
+                  {/* Hover Action drawer for message reactions / edit / delete */}
+                  {!msg.deleted && (
+                    <div className={`absolute top-0 opacity-0 group-hover:opacity-100 flex items-center gap-1 bg-slate-900/90 border border-slate-800 px-2 py-1 rounded-lg shadow-lg z-20 transition-opacity ${isMe ? "-left-40" : "-right-40"}`}>
+                      
+                      {/* Emoticons */}
+                      <div className="flex items-center gap-0.5 mr-2.5 border-r border-slate-800 pr-2">
+                        {["👍", "❤️", "😂", "😮", "😢", "🙏"].map((emoji) => (
+                          <button
+                            key={emoji}
+                            onClick={() => handleAddReaction(msg.id, emoji)}
+                            className="hover:scale-125 transition text-xs font-sans"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
 
-                    {/* Edit/Delete if owned */}
-                    {isMe && msg.type === "text" && (
+                      {/* Thread reply */}
                       <button
-                        onClick={() => { setEditingMessage(msg); setEditText(decryptedText); }}
+                        onClick={() => setReplyingTo(msg)}
                         className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white rounded"
-                        title="Edit Message"
+                        title="Reply"
                       >
-                        <Edit2 className="w-3 h-3" />
+                        <Reply className="w-3 h-3" />
                       </button>
-                    )}
-                    {isMe && (
-                      <button
-                        onClick={() => handleDeleteMessage(msg.id)}
-                        className="p-1 hover:bg-slate-800 text-rose-500 hover:bg-rose-950/20 rounded"
-                        title="Delete Message"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                )}
+
+                      {/* Edit/Delete if owned */}
+                      {isMe && msg.type === "text" && (
+                        <button
+                          onClick={() => { setEditingMessage(msg); setEditText(decryptedText); }}
+                          className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white rounded"
+                          title="Edit Message"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                        </button>
+                      )}
+                      {isMe && (
+                        <button
+                          onClick={() => handleDeleteMessage(msg.id)}
+                          className="p-1 hover:bg-slate-800 text-rose-500 hover:bg-rose-950/20 rounded"
+                          title="Delete Message"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })

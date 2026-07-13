@@ -37,6 +37,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [activeChat, setActiveChat] = useState(null);
   const [activeTab, setActiveTab] = useState("chats");
+  const [profileUser, setProfileUser] = useState(null);
   const [showCallHistory, setShowCallHistory] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" ? window.innerWidth < 768 : false);
@@ -478,6 +479,14 @@ export default function App() {
     );
   }
 
+  const handleViewUserProfile = (user) => {
+    setProfileUser(user);
+    setActiveTab("profile");
+    if (isMobile) {
+      setActiveChat(null);
+    }
+  };
+
   // If not authenticated
   if (!currentUser) {
     return <AuthScreen onAuthSuccess={(profile) => setCurrentUser(profile)} />;
@@ -524,6 +533,7 @@ export default function App() {
           }}
           allUsers={allUsers}
           onStartCall={handleStartOutgoingCall}
+          onViewUserProfile={handleViewUserProfile}
         />
       )}
 
@@ -545,6 +555,7 @@ export default function App() {
                 onDeclineCall={handleDeclineIncomingCall}
                 onAcceptCall={handleAcceptIncomingCall}
                 onEndCall={handleHangUpCall}
+                onViewUserProfile={handleViewUserProfile}
               />
             ) : showCallHistory ? (
               <CallHistoryPanel
@@ -606,7 +617,11 @@ export default function App() {
           ) : activeTab === "profile" ? (
             <ProfilePanel
               currentUser={currentUser}
-              onBack={() => setActiveTab("chats")}
+              viewingUser={profileUser}
+              onBack={() => {
+                setActiveTab("chats");
+                setProfileUser(null);
+              }}
             />
           ) : (
             <AdminPanel 
